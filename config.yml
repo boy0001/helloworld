@@ -1,0 +1,44 @@
+##################  MODES  ##########################
+# NEAR (compass points towards nearest player) - aliases [nearest, closest]
+# DEFAULT (compass points towards the spawn) - aliases [clear, reset, none]
+# RANDOM (Simulates the nether)
+# 5,-9 (compass points towards a set of co-ordinates)
+# CURRENT (like above but quicker!)
+# <playername> (will point towards the player specified)
+##################  PERMISSIONS  ####################
+#	    			compassmodes.near 
+#	    			compassmodes.random
+#	    			compassmodes.current
+#	    			compassmodes.location
+#					compassmodes.player
+#	    			compassmodes.default
+#					compassmodes.death
+#					compassmodes.bed
+#	    			compassmodes.other
+#					compass.reload
+##################  COMMANDS  #######################
+## COMMAND ##				## RESULT ##	## PERM ##
+# /compass help				these commands		NONE
+# /compass list				list of modes		NONE
+# /compass reload			reloads plugin	compass.reload
+# /compass <mode>			sets your mode	see permissions above
+# /compass <mode> <player>	mode for user	compass.other
+#
+#
+#
+#
+#Range decides how far away a player can be tracked from. USE "0" for no range
+range: 512
+# If override is set to true, then it will ignore the user's preference for that map
+multiworld:
+  world:
+    mode: DEFAULT
+    override: false
+  world_nether:
+    mode: DEFAULT
+    override: false
+  world_the_end:
+    mode: DEFAULT
+    override: false
+Players:
+  Empire92: HOME
