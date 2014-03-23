@@ -1,6 +1,6 @@
 name: CompassModes
 main: io.github.boy0001.plugin.HelloWorld
-version: 0.2.2
+version: 0.2.5
 commands:
    compass:
       description: Commands for CompassModes.

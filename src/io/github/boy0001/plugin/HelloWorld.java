@@ -14,6 +14,7 @@ import org.bukkit.block.Block;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.entity.Player;
+import org.bukkit.event.Event;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.Listener;
 import org.bukkit.event.entity.EntityDamageByEntityEvent;
@@ -24,11 +25,15 @@ import org.bukkit.event.inventory.InventoryClickEvent;
 import org.bukkit.event.inventory.InventoryType;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerDropItemEvent;
+import org.bukkit.event.player.PlayerInventoryEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerRespawnEvent;
+import org.bukkit.event.player.PlayerTeleportEvent;
 import org.bukkit.inventory.ItemStack;
 import org.bukkit.inventory.PlayerInventory;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitScheduler;
 import org.bukkit.Location;
 import org.bukkit.Bukkit;
 import org.bukkit.ChatColor;
@@ -76,14 +81,17 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 				if (getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) {
 					mymode = getConfig().getString("multiworld."+player.getWorld().getName()+".mode");
 				}
-				else {
+				else if (getConfig().contains("Players."+player.getName()+"."+player.getWorld().getName())) {
 					mymode = "false";
+				}
+				else {
+					mymode = getConfig().getString("multiworld."+player.getWorld().getName()+".mode");
 				}
 	    		}
 	    		catch (Exception e) {
 	    			mymode = "false";
 	    		}
-	    		if ( ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase("NEAR"))&&(checkperm(player,"compassmodes.near")) && (mymode == "false")) || (mymode.equalsIgnoreCase("NEAR"))){
+	    		if ( ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase("NEAR"))&&(checkperm(player,"compassmodes.near")) && (mymode == "false")) || (mymode.equalsIgnoreCase("NEAR"))){
 	    			double last = 0;
 	        		Player sp = null;
 	        		
@@ -100,34 +108,33 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 						player.setCompassTarget(sp.getLocation());
 					}
 	        	}
-	    		if ( ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase("RANDOM"))&&(checkperm(player,"compassmodes.random")) && (mymode == "false")) || (mymode.equalsIgnoreCase("RANDOM"))) {
-
+	    		else if ( ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase("RANDOM"))&&(checkperm(player,"compassmodes.random")) && (mymode == "false")) || (mymode.equalsIgnoreCase("RANDOM"))) {
 	    			Random rand1 = new Random();
 	    			int random1 = rand1.nextInt(500)-250;
 	    			int random2 = rand1.nextInt(500)-250;
 	    			Location myloc = new Location(player.getWorld(),player.getLocation().getX()+random1,64,player.getLocation().getZ()+random2);
 	    			player.setCompassTarget(myloc);
 	    		}
-	    		if (((Bukkit.getPlayer(getConfig().getString("Players."+player.getName())) != null)&&(checkperm(player,"compassmodes.player"))) || (mymode.equalsIgnoreCase(getConfig().getString("Players."+player.getName())))) {
-	    			if (Bukkit.getPlayer(getConfig().getString("Players."+player.getName())).getWorld() == player.getWorld()) {
-	    				double dist = player.getLocation().distance(Bukkit.getPlayer(getConfig().getString("Players."+player.getName())).getLocation());
+	    		else if (((Bukkit.getPlayer(getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName())) != null)&&(checkperm(player,"compassmodes.player"))) || (mymode.equalsIgnoreCase(getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName())))) {
+	    			if (Bukkit.getPlayer(getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName())).getWorld() == player.getWorld()) {
+	    				double dist = player.getLocation().distance(Bukkit.getPlayer(getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName())).getLocation());
 	    				if ((getConfig().getString("range")=="0")||(dist < Integer.parseInt(getConfig().getString("range")))) {
-	    					player.setCompassTarget(Bukkit.getPlayer(getConfig().getString("Players."+player.getName())).getLocation());
+	    					player.setCompassTarget(Bukkit.getPlayer(getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName())).getLocation());
 	    				}
 	    				
 	    			}
 	    		}
     		}
     		catch (Exception e) {		
-
 			}
 	    }
 		}
 	};
 	@EventHandler
 	public void onEntityDeath(EntityDeathEvent event) {
+		
 		if (event instanceof PlayerDeathEvent) 	{
-        Player player = (Player) event.getEntity();
+        final Player player = (Player) event.getEntity();
         Location loc = player.getLocation();
         respawnitems.remove(player.getName());
         deathpoints.put(player.getName(),loc.getX()+","+loc.getZ()+","+player.getWorld().getName());
@@ -147,7 +154,8 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	
 	@EventHandler
 	public void onPlayerRespawn(PlayerRespawnEvent event) {
-		Player player = event.getPlayer();
+		final Player player = event.getPlayer();
+
 		if (respawnitems.get(player.getName()) != null) {
 			if (getConfig().getString("force-compass-slot").equalsIgnoreCase("false")) {
 				player.getInventory().addItem(new ItemStack(Material.COMPASS, 1));
@@ -167,8 +175,17 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 				}
 			}
 		}
+		
+		final Player myplayer = event.getPlayer();
+		BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
+        scheduler.scheduleSyncDelayedTask(this, new Runnable() {
+
+			@Override
+			public void run() {
+				update(myplayer);				
+			}
+        }, 20L);
 	}
-	
 	HashMap<String, String> deathpoints = new HashMap<String, String>();
 	HashMap<String, Object> respawnitems = new HashMap<String, Object>();
 	
@@ -204,6 +221,39 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 		}
 	}
 	
+	@EventHandler
+	public void onPlayerTeleport(PlayerTeleportEvent event) {
+		final Player myplayer = event.getPlayer();
+		BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
+        scheduler.scheduleSyncDelayedTask(this, new Runnable() {
+
+			@Override
+			public void run() {
+				update(myplayer);				
+			}
+        }, 20L);
+	}
+	
+	@EventHandler
+	public void onPlayerMove(PlayerMoveEvent event) {
+		try {
+		Player player = event.getPlayer();
+		if (getConfig().getString("force-compass-slot").equalsIgnoreCase("false")==false) {
+			int index = (getConfig().getInt("force-compass-slot")-1);
+			ItemStack item = player.getInventory().getItem(index);
+			if (item==null) {
+				player.getInventory().setItem(getConfig().getInt("force-compass-slot"), new ItemStack(Material.COMPASS));
+			}
+			else if (item.getType().equals(Material.COMPASS)==false) {
+				player.getInventory().setItem(getConfig().getInt("force-compass-slot"), new ItemStack(Material.COMPASS));
+			}
+		}
+		}
+		catch (Exception e) {
+			
+		}
+		
+	}
 	
 	
 	@Override
@@ -213,7 +263,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 		getConfig().options().copyDefaults(true);
         final Map<String, Object> options = new HashMap<String, Object>();
         
-        getConfig().set("version", "0.2.2");
+        getConfig().set("version", "0.2.5");
         options.put("range", "512");
         options.put("keep-existing-compass", false);
         options.put("give-compass-on-respawn", false);
@@ -221,7 +271,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
         //TODO give compass on death
         //TODO give compass only if they die with compass
         //TODO prevent dying with a compass
-        options.put("Players.Empire92","RANDOM");
+        options.put("Players.Notch","RANDOM");
         for(World world : getServer().getWorlds()) {
         	options.put("multiworld."+world.getName()+".mode","DEFAULT");
             options.put("multiworld."+world.getName()+".override",false);
@@ -292,25 +342,25 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			String mycolor;
 	    			String mode = "near";
 	    			try {
-	    					if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}	
+	    					if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}	
 	    			}
 	    			catch (Exception e) {
-	    				if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";} else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
+	    				if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";} else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
 	    			}
 	    			msg(player,mycolor + " - Near");
 	    			
 	    			mode = "random";
 	    			try {
-    					if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}	
+    					if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}	
 	    			}
 	    			catch (Exception e) {
-	    				if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";} else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
+	    				if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";} else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
 	    			}
 	    			msg(player,mycolor + " - Random");
 
 	    			mode = "current";
 	    			try {
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
 	    				if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
@@ -319,20 +369,20 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			
 	    			mode = "location";
 	    			try {
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((StringUtils.countMatches(String.valueOf(this.getConfig().getString("Players."+player.getName())), ",") == 1)) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((StringUtils.countMatches(String.valueOf(this.getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName())), ",") == 1)) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
-	    				if ((StringUtils.countMatches(String.valueOf(this.getConfig().getString("Players."+player.getName())), ",") == 1)) {mycolor = ChatColor.BLUE + "";} else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
+	    				if ((StringUtils.countMatches(String.valueOf(this.getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName())), ",") == 1)) {mycolor = ChatColor.BLUE + "";} else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
 	    			}
 	    			msg(player,mycolor + " - X,Y");
 	    			
 	    			mode = "player";
 	    			try {
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((Bukkit.getPlayer(this.getConfig().getString("Players."+player.getName()))!=null)) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((Bukkit.getPlayer(this.getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()))!=null)) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
 	    				try {
-	    				if ((Bukkit.getPlayer(this.getConfig().getString("Players."+player.getName()))!=null)) {mycolor = ChatColor.BLUE + "";} else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
+	    				if ((Bukkit.getPlayer(this.getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()))!=null)) {mycolor = ChatColor.BLUE + "";} else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
 	    				}
 	    				catch (Exception e1) {
 	    					mycolor = "" + ChatColor.GRAY;
@@ -341,7 +391,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			msg(player,mycolor + " - <Player>");
 	    			try {
 	    			mode = "default";
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
 	    				if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
@@ -350,7 +400,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			
 	    			mode = "bed";
 	    			try {
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
 	    				if (checkperm(player,"compassmodes."+mode)) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
@@ -359,7 +409,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			
 	    			mode = "death";
 	    			try {
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.deathpoint")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.deathpoint")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
 	    				if (checkperm(player,"compassmodes.deathpoint")) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
@@ -368,7 +418,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			
 	    			mode = "north";
 	    			try {
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
 	    				if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
@@ -377,7 +427,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			
 	    			mode = "east";
 	    			try {
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
 	    				if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
@@ -386,7 +436,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			
 	    			mode = "south";
 	    			try {
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
 	    				if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
@@ -395,12 +445,13 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			
 	    			mode = "west";
 	    			try {
-	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
+	    			if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) && (this.getConfig().getString("multiworld."+player.getWorld().getName()+".mode").equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if ((this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true"))==false) { if ((getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName()).equalsIgnoreCase(mode))) {mycolor = ChatColor.BLUE + "";}else if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";}else {mycolor = ChatColor.RED + "";}}else { mycolor = ChatColor.GRAY + "";}
 	    			}
 	    			catch (Exception e) {
 	    				if (checkperm(player,"compassmodes.location")) { mycolor = ChatColor.GREEN + "";} else { mycolor = ""+ChatColor.RED; }
 	    			}
 	    			msg(player,mycolor + " - West");
+	    			msg(player,"&f - None");
 	    			
 //	    			compassmodes.near 
 //	    			compassmodes.random
@@ -425,9 +476,12 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    		else if ((args[0].equalsIgnoreCase("reload"))){
 	    			if (player!=null) {
 	    				if (checkperm(player,"compassmodes.reload")) {
+	    					for (Player user:Bukkit.getOnlinePlayers()) {
+	    						update(user);
+	    					}
 	    	    			this.reloadConfig();
 	    	    			this.saveDefaultConfig();
-	    					msg(player,ChatColor.GRAY + "Successfully reloaded" + ChatColor.RED + "CompassModes"+ChatColor.WHITE + ".");
+	    					msg(player,ChatColor.GRAY + "Successfully reloaded " + ChatColor.RED + "CompassModes"+ChatColor.WHITE + ".");
 	    				}
 	    				else {
 	    					msg(player,ChatColor.RED + "Sorry, you do not have permission to perform this action.");
@@ -444,7 +498,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    			if (sender instanceof Player) {
 	    				if ((args[0].equalsIgnoreCase("CURRENT"))&&(checkperm(player,"compassmodes.current"))){
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+sender.getName(),player.getLocation().getX()+","+player.getLocation().getZ());
+	    					this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),player.getLocation().getX()+","+player.getLocation().getZ());
 	    					if (this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) {
 	    						msg(player,"Your preference is currently being overridden");
 	    					}
@@ -477,7 +531,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 		    						player.setCompassTarget(sp.getLocation());
 		    						msg(player,"Currently tracking "+sp.getName());
 		    					}
-	    						this.getConfig().set("Players."+sender.getName(),"NEAR");
+	    						this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),"NEAR");
 	    						this.saveConfig();
 	    					}
 	    					
@@ -488,16 +542,23 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				}
 	    				else if ((args[0].equalsIgnoreCase("DEFAULT"))&&(checkperm(player,"compassmodes.default"))){
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+sender.getName(),"DEFAULT");
+	    					this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),"DEFAULT");
 	    					player.setCompassTarget(player.getWorld().getSpawnLocation());
 	    					this.saveConfig();
 	    					msg(player,"Compass set to spawnpoint");
 	    				
 	    				}
+	    				else if ((args[0].equalsIgnoreCase("NONE"))){
+	    					this.reloadConfig();
+	    					this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),null);
+	    					msg(player,"Compass preference cleared");
+	    					this.saveConfig();
+	    					update((Player) sender);
+	    				}
 	    				else if ((args[0].equalsIgnoreCase("BED"))&&(checkperm(player,"compassmodes.bed"))){
 	    					this.reloadConfig();
 	    					if (player.getBedSpawnLocation() != null) {
-	    						this.getConfig().set("Players."+sender.getName(),"BED");
+	    						this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),"BED");
 	    						player.setCompassTarget(player.getBedSpawnLocation());
 		    					this.saveConfig();
 		    					msg(player,"Compass set to your bed");
@@ -508,7 +569,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				}
 	    				else if ((args[0].equalsIgnoreCase("RANDOM"))&&(checkperm(player,"compassmodes.random"))){
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+sender.getName(),"RANDOM");
+	    					this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),"RANDOM");
 	    					player.setCompassTarget(player.getLocation());
 	    					this.saveConfig();
 	    					msg(player,"Compass will now point towards a random location");
@@ -516,7 +577,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				else if ((args[0].equalsIgnoreCase("EAST"))&&(checkperm(player,"compassmodes.location"))){
 	    					Location myloc = new Location(player.getWorld(),-Double.MAX_VALUE,64,0);
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+sender.getName(),-Double.MAX_VALUE+",0");
+	    					this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),-Double.MAX_VALUE+",0");
 	    					player.setCompassTarget(myloc);
 	    					this.saveConfig();
 	    					msg(player,"Compass will now point east");
@@ -524,7 +585,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				else if ((args[0].equalsIgnoreCase("WEST"))&&(checkperm(player,"compassmodes.location"))){
 	    					Location myloc = new Location(player.getWorld(),Double.MAX_VALUE,64,0);
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+sender.getName(),Double.MAX_VALUE+",0");
+	    					this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),Double.MAX_VALUE+",0");
 	    					player.setCompassTarget(myloc);
 	    					this.saveConfig();
 	    					msg(player,"Compass will now point west");
@@ -532,7 +593,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				else if ((args[0].equalsIgnoreCase("SOUTH"))&&(checkperm(player,"compassmodes.location"))){
 	    					Location myloc = new Location(player.getWorld(),0,64,-Double.MAX_VALUE);
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+sender.getName(),"0,"+(-Double.MAX_VALUE));
+	    					this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),"0,"+(-Double.MAX_VALUE));
 	    					player.setCompassTarget(myloc);
 	    					this.saveConfig();
 	    					msg(player,"Compass will now point south");
@@ -540,20 +601,21 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				else if ((args[0].equalsIgnoreCase("NORTH"))&&(checkperm(player,"compassmodes.location"))){ //TODO
 	    					Location myloc = new Location(player.getWorld(),0,64,Double.MIN_VALUE);
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+sender.getName(),"0,"+(Double.MAX_VALUE));
+	    					this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),"0,"+(Double.MAX_VALUE));
 	    					player.setCompassTarget(myloc);
 	    					this.saveConfig();
 	    					msg(player,"Compass will now point north");
 	    				}
 	    				else if ((args[0].equalsIgnoreCase("DEATH"))&&(checkperm(player,"compassmodes.deathpoint"))){
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+sender.getName(),"death");
+	    					this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),"death");
 	    					try {
 	    						String[] last =  deathpoints.get(sender.getName()).split(",");
 	    						Location myloc = new Location(Bukkit.getWorld(last[2]),Double.valueOf(last[0]).intValue(),64,Double.valueOf(last[1]).intValue());
 	    						if (Bukkit.getWorld(last[2]) == player.getWorld()) {
 	    							player.setCompassTarget(myloc);
-	    							this.getConfig().set("Players."+sender.getName(),"DEATH");
+	    							this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),"DEATH");
+	    							msg(player,"Compass set to your death point");
 	    						}
 	    						else {
 	    							msg(player,"You did not die in this map.");
@@ -578,7 +640,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 		    						player.setCompassTarget(myloc);
 		    					}
 	    						msg(player,"Compass set to "+args[0]);
-	    						this.getConfig().set("Players."+sender.getName(),args[0]);
+	    						this.getConfig().set("Players."+sender.getName()+"."+((Player) sender).getWorld().getName(),args[0]);
 	    						this.saveConfig();
 	    					}
 	    					catch (Exception e) {
@@ -587,7 +649,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				}
 	    				else if (((Bukkit.getPlayer(args[0])!=null))&&(checkperm(player,"compassmodes.player"))){
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+player.getName(),args[0]);
+	    					this.getConfig().set("Players."+player.getName()+"."+player.getWorld().getName(),args[0]);
 	    					this.saveConfig();
 	    					msg(player,"You are now tracking " + args[0]);
     						if (this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) {
@@ -611,13 +673,13 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				if (args[0].equalsIgnoreCase("DEFAULT")) {
 	    					user.setCompassTarget(user.getWorld().getSpawnLocation());
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+args[1],"DEFAULT");
+	    					this.getConfig().set("Players."+args[1]+"."+user.getWorld().getName()+"."+user.getWorld().getName(),"DEFAULT");
 	    					this.saveConfig();
 	    					msg(player,"Compass set to DEFAULT for "+args[1]);
 	    				}
 	    				else if (args[0].equalsIgnoreCase("HERE")) {
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+args[1],player.getLocation().getX()+","+player.getLocation().getZ());
+	    					this.getConfig().set("Players."+args[1]+"."+user.getWorld().getName(),player.getLocation().getX()+","+player.getLocation().getZ());
 	    					this.saveConfig();
 	    					Location myloc = new Location(player.getWorld(),player.getLocation().getX(),64,player.getLocation().getZ());
 	    					user.setCompassTarget(myloc);
@@ -625,7 +687,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				}
 	    				else if (args[0].equalsIgnoreCase("CURRENT")) {
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+args[1],user.getLocation().getX()+","+user.getLocation().getZ());
+	    					this.getConfig().set("Players."+args[1]+"."+user.getWorld().getName(),user.getLocation().getX()+","+user.getLocation().getZ());
 	    					this.saveConfig();
 	    					Location myloc = new Location(user.getWorld(),user.getLocation().getX(),64,user.getLocation().getZ());
 	    					user.setCompassTarget(myloc);
@@ -633,13 +695,13 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				}
 	    				else if (args[0].equalsIgnoreCase("RANDOM")) {
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+args[1],"RANDOM");
+	    					this.getConfig().set("Players."+args[1]+"."+user.getWorld().getName(),"RANDOM");
 	    					this.saveConfig();
 	    					msg(player,"Compass set to RANDOM for "+args[1]);
 	    				}
 	    				else if (args[0].equalsIgnoreCase("DEATH")) {
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+args[1],"DEATH");
+	    					this.getConfig().set("Players."+args[1]+"."+user.getWorld().getName(),"DEATH");
 	    					this.saveConfig();
 	    					
 	    					
@@ -659,7 +721,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				}
 	    				else if (args[0].equalsIgnoreCase("NEAR")) {
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+args[1],"NEAR");
+	    					this.getConfig().set("Players."+args[1]+"."+user.getWorld().getName(),"NEAR");
 	    					this.saveConfig();
 	    					msg(player,"Compass set to NEAR for "+args[1]);
 	    				}
@@ -669,7 +731,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    						String[] parts = args[0].split(",");
 	    						Location myloc = new Location(user.getWorld(),Double.valueOf(parts[0]).intValue(),64,Double.valueOf(parts[1]).intValue());
 	    						user.setCompassTarget(myloc);
-	    						this.getConfig().set("Players."+args[1],args[0]);
+	    						this.getConfig().set("Players."+args[1]+"."+user.getWorld().getName(),args[0]);
 	    						this.saveConfig();
 	    						msg(player,"Compass set to "+args[0]+ "for "+args[1]);
 	    					}
@@ -723,7 +785,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
 	    				}
 	    				else if ((Bukkit.getPlayer(args[0])!=null)){
 	    					this.reloadConfig();
-	    					this.getConfig().set("Players."+args[1],args[0]);
+	    					this.getConfig().set("Players."+args[1]+"."+user.getWorld().getName(),args[0]);
 	    					this.saveConfig();
 	    					msg(player,args[1] + " is now tracking " + args[0]);
 	    				}
@@ -749,40 +811,45 @@ public final class HelloWorld extends JavaPlugin implements Listener {
     	}
     	return false; 
     }
-
+    
     @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent evt) {
-    	
+    public void onPlayerJoin(PlayerJoinEvent event) {
+		final Player myplayer = event.getPlayer();
+		BukkitScheduler scheduler = Bukkit.getServer().getScheduler();
+        scheduler.scheduleSyncDelayedTask(this, new Runnable() {
+
+			@Override
+			public void run() {
+				update(myplayer);				
+			}
+        }, 20L);
+    }
+    
+    public void update(Player player) {
     	boolean override = false;
     	
-        Player player = evt.getPlayer(); // The player who joined
-        String current = this.getConfig().getString("Players."+player.getName());
-        try {
-		if (this.getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) {
-			player.sendMessage("Your compass preference is currently being overridden");
-			override = true;
-			current = getConfig().getString("multiworld."+player.getWorld().getName()+".mode");
-		}
-        }
-        catch (Exception e) {
-        	
-        }
+        
+        
 		if (true) {
 		
         //Location myloc = new Location(player.getWorld(),191,18,-1023);
         //player.setCompassTarget(player.getLocation());
-
+			String current = "";
         try {
-        	
     		try {
 			if (getConfig().getString("multiworld."+player.getWorld().getName()+".override").equalsIgnoreCase("true")) {
 				current = getConfig().getString("multiworld."+player.getWorld().getName()+".mode");
 			}
+			else if (this.getConfig().contains("Players."+player.getName()+"."+player.getWorld().getName())) {
+				current = getConfig().getString("Players."+player.getName()+"."+player.getWorld().getName());
+				
+			}
+			else {
+				current = getConfig().getString("multiworld."+player.getWorld().getName()+".mode");
+			}
     		}
     		catch (Exception e) {
-    			
     		}
-
         	if (((StringUtils.countMatches(String.valueOf(current), ",") == 1)&&(checkperm(player,"compassmodes.location")))) {
         		String[] parts = current.split(",");
         		Location myloc = new Location(player.getWorld(),Double.valueOf(parts[0]).intValue(),64,Double.valueOf(parts[1]).intValue());
@@ -802,7 +869,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
         	else if ((current.equalsIgnoreCase("BED"))&&(checkperm(player,"compassmodes.bed"))) { 
 				this.reloadConfig();
 				if (player.getBedSpawnLocation() != null) {
-					this.getConfig().set("Players."+player.getName(),"BED");
+					this.getConfig().set("Players."+player.getName()+"."+player.getWorld().getName(),"BED");
 					player.setCompassTarget(player.getBedSpawnLocation());
 					this.saveConfig();
 				}       	
@@ -810,6 +877,7 @@ public final class HelloWorld extends JavaPlugin implements Listener {
         }
         catch (Exception e) {
         	player.setCompassTarget(player.getWorld().getSpawnLocation());
+        	e.printStackTrace();
         }
     }
 }
